@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Example on Cityscapes
-python -m torch.distributed.launch --nproc_per_node=2 train.py \
+python train.py \
    --dataset cityscapes \
    --val_dataset cityscapes \
    --arch network.deepv3.DeepR101V3PlusD_OS8 \
@@ -22,4 +22,7 @@ python -m torch.distributed.launch --nproc_per_node=2 train.py \
    --date 0000 \
    --exp r101_os8_base_60K \
    --ckpt ./logs/ \
+   --image_mode RGBD \
+   --wandb_project sml \
+   --wandb_run_name sml_RGBD_default \
    --tb_path ./logs/

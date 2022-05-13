@@ -44,8 +44,8 @@ import torchvision.models as models
 selem = torch.ones((3, 3)).cuda()
 selem_dilation = torch.FloatTensor(ndi.generate_binary_structure(2, 1)).cuda()
 
-print(f'selem:\n\n{selem}')
-print(f'selem_dilation:\n\n{selem_dilation}')
+# print(f'selem:\n\n{selem}')
+# print(f'selem_dilation:\n\n{selem_dilation}')
 
 # NOTE(shjung13): Dilation filters to expand the boundary maps (L1)
 d_k1 = torch.zeros((1, 1, 2 * 1 + 1, 2 * 1 + 1)).cuda()
@@ -67,7 +67,7 @@ for k, v in d_ks.items():
         v = dilation(v, selem_dilation)
     d_ks[k] = v.squeeze(0).squeeze(0)
 
-    print(f'dilation kernel at {k}:\n\n{d_ks[k]}')
+    # print(f'dilation kernel at {k}:\n\n{d_ks[k]}')
 
 
 class _AtrousSpatialPyramidPoolingModule(nn.Module):
@@ -280,6 +280,14 @@ class DeepV3Plus(nn.Module):
             prev_final_channel = 464
             final_channel = 1024
             resnet = models.shufflenet_v2_x1_0(pretrained=True)
+            
+            if args.image_mode == 'RGBD':
+                resnet.conv1 = nn.Sequential(
+                    nn.Conv2d(4, resnet._stage_out_channels[0], 3, 2, 1, bias=False),
+                    nn.BatchNorm2d(resnet._stage_out_channels[0]),
+                    nn.ReLU(inplace=True),
+                )
+
             self.layer0 = nn.Sequential(resnet.conv1, resnet.maxpool)
             self.layer1 = resnet.stage2
             self.layer2 = resnet.stage3
@@ -435,8 +443,13 @@ class DeepV3Plus(nn.Module):
             elif trunk == 'resnet-50':
                 resnet = Resnet.resnet50()
                 resnet.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
-            elif trunk == 'resnet-101': # three 3 X 3
+            elif trunk == 'resnet-101': # three 3 X mean3
                 resnet = Resnet.resnet101(pretrained=True)
+
+                if args.image_mode == 'RGBD':
+                    resnet.conv1 = nn.Conv2d(4, 64, kernel_size=3, stride=2, padding=1,
+                               bias=False)
+
                 resnet.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu1,
                                               resnet.conv2, resnet.bn2, resnet.relu2,
                                               resnet.conv3, resnet.bn3, resnet.relu3, resnet.maxpool)
@@ -566,8 +579,11 @@ class DeepV3Plus(nn.Module):
         self.class_var = var
 
     def forward(self, x, seg_gts=None, ood_gts=None, aux_gts=None, ignore_label=255):
+        
         x_size = x.size()  # 800
         input_img = x.detach().cpu().clone()
+        # print("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII")
+        # print(x.shape)
         x = self.layer0(x)  # 400
         x = self.layer1(x)  # 400
         low_level = x

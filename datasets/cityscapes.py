@@ -8,12 +8,15 @@ import numpy as np
 from PIL import Image, ImageCms
 from skimage import color
 from torch.utils import data
+import cv2
 
 import torch
 import torchvision.transforms as transforms
 import datasets.uniform as uniform
 import datasets.cityscapes_labels as cityscapes_labels
 import copy
+
+from torchvision.transforms.functional import resize
 
 from config import cfg
 
@@ -22,7 +25,7 @@ id_to_trainid = cityscapes_labels.label2trainid
 id_to_oodid = cityscapes_labels.label2oodid
 num_classes = 19
 ignore_label = 255
-root = cfg.DATASET.CITYSCAPES_DIR
+root = '/media/nazirnayal/DATA/datasets/cityscapes'
 aug_root = cfg.DATASET.CITYSCAPES_AUG_DIR
 img_postfix = '_leftImg8bit.png'
 
@@ -214,7 +217,7 @@ class CityScapes(data.Dataset):
     def __init__(self, quality, mode, maxSkip=0, joint_transform=None, sliding_crop=None,
                  transform=None, target_transform=None, target_aux_transform=None, dump_images=False,
                  cv_split=None, eval_mode=False,
-                 eval_scales=None, eval_flip=False):
+                 eval_scales=None, eval_flip=False, image_mode='RGB'):
         self.quality = quality
         self.mode = mode
         self.maxSkip = maxSkip
@@ -227,6 +230,7 @@ class CityScapes(data.Dataset):
         self.eval_mode = eval_mode
         self.eval_flip = eval_flip
         self.eval_scales = None
+        self.image_mode = image_mode
 
         if eval_scales != None:
             self.eval_scales = [float(scale) for scale in eval_scales.split(",")]
@@ -241,6 +245,14 @@ class CityScapes(data.Dataset):
         self.imgs, _ = make_dataset(quality, mode, self.maxSkip, cv_split=self.cv_split)
         if len(self.imgs) == 0:
             raise RuntimeError('Found 0 images, please check the data set')
+
+        if self.image_mode == 'RGBD':
+            self.depth_maps = []
+            for i in range(len(self.imgs)):
+                img_path, _ = self.imgs[i]
+
+                depth_path = img_path.replace('leftImg8bit', 'depth_maps')[:-4] + '_disp.npy'
+                self.depth_maps.extend([depth_path])
 
         self.mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
@@ -315,6 +327,17 @@ class CityScapes(data.Dataset):
             img.save(out_img_fn)
             seg_mask_img.save(seg_out_msk_fn)
             ood_mask_img.save(ood_out_msk_fn)
+        
+        if self.image_mode == 'RGBD':
+            depth_map = np.load(self.depth_maps[index])
+            
+            height, width = img.shape[1], img.shape[2]
+
+            depth_map = transforms.ToTensor()(depth_map)
+            depth_map = resize(depth_map, size=(height, width))
+
+            img = torch.cat([img, depth_map], dim=0)
+
 
         return img, seg_mask, ood_mask, img_name, mask_aux
 
@@ -329,7 +352,7 @@ class CityScapesUniform(data.Dataset):
     def __init__(self, quality, mode, maxSkip=0, joint_transform_list=None, sliding_crop=None,
                  transform=None, target_transform=None, target_aux_transform=None, dump_images=False,
                  cv_split=None, class_uniform_pct=0.5, class_uniform_tile=1024,
-                 test=False, coarse_boost_classes=None):
+                 test=False, coarse_boost_classes=None, image_mode='RGB'):
         self.quality = quality
         self.mode = mode
         self.maxSkip = maxSkip
@@ -342,6 +365,7 @@ class CityScapesUniform(data.Dataset):
         self.class_uniform_pct = class_uniform_pct
         self.class_uniform_tile = class_uniform_tile
         self.coarse_boost_classes = coarse_boost_classes
+        self.image_mode = image_mode
 
         if cv_split:
             self.cv_split = cv_split
@@ -507,6 +531,19 @@ class CityScapesUniform(data.Dataset):
         if self.target_transform is not None:
             seg_mask = self.target_transform(seg_mask)
             ood_mask = self.target_transform(ood_mask)
+
+        if self.image_mode == 'RGBD':
+            depth_path = img_path.replace('leftImg8bit', 'depth_maps')[:-14] + 'leftImg8bit_disp.npy'
+            
+            depth_map = np.load(depth_path)
+            
+            height, width = img.shape[1], img.shape[2]
+            depth_map = np.squeeze(depth_map, axis=0).transpose(1, 2, 0)
+           
+            depth_map = transforms.ToTensor()(depth_map)
+            depth_map = resize(depth_map, size=(height, width))
+
+            img = torch.cat([img, depth_map], dim=0)
 
         return img, seg_mask, ood_mask, img_name, mask_aux
 

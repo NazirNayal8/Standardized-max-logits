@@ -119,7 +119,8 @@ def forgiving_state_restore(net, loaded_dict):
         if k in loaded_dict and net_state_dict[k].size() == loaded_dict[k].size():
             new_loaded_dict[k] = loaded_dict[k]
         else:
-            print("Skipped loading parameter", k)
+            pass
+            # print("Skipped loading parameter", k)
             # logging.info("Skipped loading parameter %s", k)
     net_state_dict.update(new_loaded_dict)
     net.load_state_dict(net_state_dict)
@@ -139,7 +140,8 @@ def forgiving_state_copy(target_net, source_net):
             new_loaded_dict[k] = loaded_dict[k]
             print("Matched", k)
         else:
-            print("Skipped loading parameter ", k)
+            pass
+            # print("Skipped loading parameter ", k)
             # logging.info("Skipped loading parameter %s", k)
     net_state_dict.update(new_loaded_dict)
     target_net.load_state_dict(net_state_dict)

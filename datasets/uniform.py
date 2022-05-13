@@ -261,7 +261,7 @@ def random_sampling(alist, num):
     return sampling
 
 
-def build_epoch(imgs, centroids, num_classes, class_uniform_pct):
+def build_epoch(imgs, centroids, num_classes, class_uniform_pct, depth_maps=None, add_depth_maps=False):
     """
     Generate an epochs-worth of crops using uniform sampling. Needs to be called every
     imgs: list of imgs

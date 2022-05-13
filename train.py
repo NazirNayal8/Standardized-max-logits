@@ -20,6 +20,9 @@ import torch.nn.functional as F
 from network.mynn import freeze_weights, unfreeze_weights
 import numpy as np
 import random
+import wandb
+
+from tqdm import tqdm
 
 # Argument Parser
 parser = argparse.ArgumentParser(description='Semantic Segmentation')
@@ -165,6 +168,17 @@ parser.add_argument('--smoothing_kernel_size', type=int, default=0,
 parser.add_argument('--smoothing_kernel_dilation', type=int, default=0,
                     help='kernel dilation rate of dilated smoothing')
 
+# Extra Custom Arguments
+parser.add_argument('--image_mode', type=str, default='RGB',
+                    help='If RGB, then normal images would be used, if RGBD, depth will be attached to RGB values')
+
+parser.add_argument('--wandb_project', type=str, default='sml',
+                    help='The project name to be used for logging at wandb')
+
+parser.add_argument('--wandb_run_name', type=str, default='sml_RGBD',
+                    help='The name of the wandb run to be registered'
+)
+
 args = parser.parse_args()
 
 # Enable CUDNN Benchmarking optimization
@@ -208,7 +222,13 @@ def main():
     """
     # Set up the Arguments, Tensorboard Writer, Dataloader, Loss Fn, Optimizer
     assert_and_infer_cfg(args)
-    writer = prep_experiment(args, parser)
+    prep_experiment(args, parser)
+    
+    writer = wandb.init(project=args.wandb_project)
+    
+    wandb.run.name = args.wandb_run_name
+    wandb.run.save()
+
 
     train_loader, val_loaders, train_obj, extra_val_loaders = datasets.setup_loaders(args)
 
@@ -271,6 +291,7 @@ def main():
         print("Extra validating... This won't save pth file")
         validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i, save_pth=False)
 
+    wandb.finish()
 
 def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
     """
@@ -289,7 +310,7 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
 
     curr_iter = curr_epoch * len(train_loader)
 
-    for i, data in enumerate(train_loader):
+    for i, data in enumerate(tqdm(train_loader, desc='Training Loop')):
         if curr_iter >= max_iter:
             break
         inputs, seg_gts, ood_gts, _, aux_gts = data
@@ -341,10 +362,15 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
                     logging.info(msg)
 
                     # Log tensorboard metrics for each iteration of the training phase
-                    writer.add_scalar('loss/train_loss', (train_total_loss.avg),
-                                    curr_iter)
-                    writer.add_scalar('loss/main_loss', (main_loss.item()),
-                                    curr_iter)
+                    writer.log({
+                        'loss/train_loss': train_total_loss.avg,
+                        'global_step': curr_iter
+                    })
+                    writer.log({
+                        'loss/main_loss': (main_loss.item()),
+                        'global_step':curr_iter
+                    })
+
                     train_total_loss.reset()
                     time_meter.reset()
 
@@ -375,7 +401,7 @@ def validate(val_loader, dataset, net, criterion, optim, scheduler, curr_epoch, 
     error_acc = 0
     dump_images = []
 
-    for val_idx, data in enumerate(val_loader):
+    for val_idx, data in enumerate(tqdm(val_loader, 'Validation Loop')):
         # input        = torch.Size([1, 3, 713, 713])
         # gt_image           = torch.Size([1, 713, 713])
         inputs, seg_gts, ood_gts, img_names, _ = data

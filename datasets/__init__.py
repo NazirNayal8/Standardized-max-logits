@@ -193,7 +193,8 @@ def setup_loaders(args):
                 class_uniform_pct=args.class_uniform_pct,
                 class_uniform_tile=args.class_uniform_tile,
                 test=args.test_mode,
-                coarse_boost_classes=coarse_boost_classes)
+                coarse_boost_classes=coarse_boost_classes,
+                image_mode=args.image_mode)
         else:
             train_set = dataset.CityScapes(
                 city_quality, city_mode, 0,
@@ -201,7 +202,8 @@ def setup_loaders(args):
                 transform=train_input_transform,
                 target_transform=target_train_transform,
                 target_aux_transform=target_aux_train_transform,
-                dump_images=args.dump_augmentation_images)
+                dump_images=args.dump_augmentation_images,
+                image_mode=args.image_mode)
 
         val_set = dataset.CityScapes('fine', 'val', 0,
                                      transform=val_input_transform,

@@ -103,15 +103,15 @@ def prep_experiment(args, parser):
     args.best_record = {}
     # args.best_record = {'epoch': -1, 'iter': 0, 'val_loss': 1e10, 'acc': 0,
     #                    'acc_cls': 0, 'mean_iu': 0, 'fwavacc': 0}
-    args.last_record = {}
-    if args.local_rank == 0:
-        os.makedirs(args.exp_path, exist_ok=True)
-        os.makedirs(args.tb_exp_path, exist_ok=True)
-        save_log('log', args.exp_path, args.date_str, rank=args.local_rank)
-        open(os.path.join(args.exp_path, args.date_str + '.txt'), 'w').write(
-            str(args) + '\n\n')
-        writer = SummaryWriter(log_dir=args.tb_exp_path, comment=args.tb_tag)
-        return writer
+    # args.last_record = {}
+    # if args.local_rank == 0:
+    #     os.makedirs(args.exp_path, exist_ok=True)
+    #     os.makedirs(args.tb_exp_path, exist_ok=True)
+    #     save_log('log', args.exp_path, args.date_str, rank=args.local_rank)
+    #     open(os.path.join(args.exp_path, args.date_str + '.txt'), 'w').write(
+    #         str(args) + '\n\n')
+    #     writer = SummaryWriter(log_dir=args.tb_exp_path, comment=args.tb_tag)
+    #     return writer
     return None
 
 def evaluate_eval_for_inference(hist, dataset=None):
@@ -147,7 +147,7 @@ def evaluate_eval(args, net, optimizer, scheduler, val_loss, hist, dump_images, 
         acc_cls = np.nanmean(acc_cls)
         iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
 
-        print_evaluate_results(hist, iu, dataset_name=dataset_name, dataset=dataset)
+        print_evaluate_results(hist, iu, dataset_name=dataset_name, dataset=dataset, writer=writer, curr_iter=curr_iter, epoch=epoch)
         freq = hist.sum(axis=1) / hist.sum()
         mean_iu = np.nanmean(iu)
         logging.info('mean {}'.format(mean_iu))
@@ -247,16 +247,25 @@ def evaluate_eval(args, net, optimizer, scheduler, val_loss, hist, dump_images, 
             logging.info('-' * 107)
 
         # tensorboard logging of validation phase metrics
-        writer.add_scalar('{}/acc'.format(dataset_name), acc, curr_iter)
-        writer.add_scalar('{}/acc_cls'.format(dataset_name), acc_cls, curr_iter)
-        writer.add_scalar('{}/mean_iu'.format(dataset_name), mean_iu, curr_iter)
-        writer.add_scalar('{}/val_loss'.format(dataset_name), val_loss.avg, curr_iter)
+        # writer.add_scalar('{}/acc'.format(dataset_name), acc, curr_iter)
+        # writer.add_scalar('{}/acc_cls'.format(dataset_name), acc_cls, curr_iter)
+        # writer.add_scalar('{}/mean_iu'.format(dataset_name), mean_iu, curr_iter)
+        # writer.add_scalar('{}/val_loss'.format(dataset_name), val_loss.avg, curr_iter)
+
+        writer.log({
+            'val_metrics/acc': acc, 
+            'val_metrics/mean_iu': mean_iu,
+            'val_metrics/acc_cls': acc_cls,
+            'losses/val_loss': val_loss.avg,
+            'global_step': curr_iter,
+            'epoch': epoch 
+        })
 
 
 
 
 
-def print_evaluate_results(hist, iu, dataset_name=None, dataset=None):
+def print_evaluate_results(hist, iu, dataset_name=None, dataset=None, writer=None, curr_iter=-1, epoch=-1):
     # fixme: Need to refactor this dict
     try:
         id2cat = dataset.id2cat
@@ -292,9 +301,24 @@ def print_evaluate_results(hist, iu, dataset_name=None, dataset=None):
             iu_true_positive[idx] / (iu_true_positive[idx] + iu_false_negative[idx]))
         logging.info('{}    {}   {}  {}     {}  {}   {}   {}'.format(
             idx_string, class_name, iu_string, precision, recall, tp, fp, fn))
+
+        writer.log({
+            f'class_iu/{idx_string}_{class_name}': iu_string,
+            f'class_precision/{idx_string}_{class_name}': precision,
+            f'class_recall/{idx_string}_{class_name}': recall,
+            f'class_tp/{idx_string}_{class_name}': tp,
+            f'class_fp/{idx_string}_{class_name}': fp,
+            f'class_fn/{idx_string}_{class_name}': fn,
+            'global_step': curr_iter,
+            'epoch': epoch
+        })
+    
+    writer.log({
+        'val_metrics/final_mIoU': modified_iu / 19.,
+        'global_step': curr_iter,
+        'epoch': epoch
+    })    
     print(f'Final mIoU: {modified_iu / 19.}')
-
-
 
 
 class AverageMeter(object):
