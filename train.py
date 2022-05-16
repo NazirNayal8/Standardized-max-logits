@@ -265,14 +265,14 @@ def main():
 
         i = train(train_loader, net, optim, epoch, writer, scheduler, args.max_iter)
         train_loader.sampler.set_epoch(epoch + 1)
-        if i % args.val_interval == 0:
-            for dataset, val_loader in val_loaders.items():
-                validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i)
-        else:
-            if args.local_rank == 0:
-                print("Saving pth file...")
-                evaluate_eval(args, net, optim, scheduler, None, None, [],
-                            writer, epoch, "None", None, i, save_pth=True)
+        # if i % args.val_interval == 0:
+        for dataset, val_loader in val_loaders.items():
+            validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i)
+        # else:
+        #     if args.local_rank == 0:
+        #         print("Saving pth file...")
+        #         evaluate_eval(args, net, optim, scheduler, None, None, [],
+        #                     writer, epoch, "None", None, i, save_pth=True)
 
         if args.class_uniform_pct:
             if epoch >= args.max_cu_epoch:

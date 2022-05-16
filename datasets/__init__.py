@@ -208,7 +208,7 @@ def setup_loaders(args):
         val_set = dataset.CityScapes('fine', 'val', 0,
                                      transform=val_input_transform,
                                      target_transform=target_transform,
-                                     cv_split=args.cv)
+                                     cv_split=args.cv, image_mode=args.image_mode)
         train_sets.append(train_set)
         val_sets.append(val_set)
         val_dataset_names.append('cityscapes')

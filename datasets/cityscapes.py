@@ -290,7 +290,24 @@ class CityScapes(data.Dataset):
             ood_mask_copy[mask == k] = v
 
         if self.eval_mode:
-            return [transforms.ToTensor()(img)], self._eval_get_item(img, seg_mask_copy,
+            
+            img_k = transforms.ToTensor()(img)
+
+            if self.image_mode == 'RGBD':
+                
+                depth_path = img_path.replace('leftImg8bit', 'depth_maps')[:-14] + 'leftImg8bit_disp.npy'
+                
+                depth_map = np.load(depth_path)
+                
+                height, width = img_k.shape[1], img.shape[2]
+                depth_map = np.squeeze(depth_map, axis=0).transpose(1, 2, 0)
+            
+                depth_map = transforms.ToTensor()(depth_map)
+                depth_map = resize(depth_map, size=(height, width))
+
+                img_k = torch.cat([img_k, depth_map], dim=0)
+
+            return [img_k], self._eval_get_item(img, seg_mask_copy,
                                                                      ood_mask_copy,
                                                                      self.eval_scales,
                                                                      self.eval_flip), img_name
@@ -329,10 +346,13 @@ class CityScapes(data.Dataset):
             ood_mask_img.save(ood_out_msk_fn)
         
         if self.image_mode == 'RGBD':
-            depth_map = np.load(self.depth_maps[index])
+            depth_path = img_path.replace('leftImg8bit', 'depth_maps')[:-14] + 'leftImg8bit_disp.npy'
+            
+            depth_map = np.load(depth_path)
             
             height, width = img.shape[1], img.shape[2]
-
+            depth_map = np.squeeze(depth_map, axis=0).transpose(1, 2, 0)
+           
             depth_map = transforms.ToTensor()(depth_map)
             depth_map = resize(depth_map, size=(height, width))
 

@@ -15,7 +15,7 @@ python train.py \
    --scale_min 0.5 \
    --scale_max 2.0 \
    --rrotate 0 \
-   --max_iter 60000 \
+   --max_iter 120000 \
    --bs_mult 2 \
    --gblur \
    --color_aug 0.5 \

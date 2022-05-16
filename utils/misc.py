@@ -101,17 +101,17 @@ def prep_experiment(args, parser):
     args.ngpu = torch.cuda.device_count()
     args.date_str = str(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
     args.best_record = {}
-    # args.best_record = {'epoch': -1, 'iter': 0, 'val_loss': 1e10, 'acc': 0,
-    #                    'acc_cls': 0, 'mean_iu': 0, 'fwavacc': 0}
-    # args.last_record = {}
-    # if args.local_rank == 0:
-    #     os.makedirs(args.exp_path, exist_ok=True)
-    #     os.makedirs(args.tb_exp_path, exist_ok=True)
-    #     save_log('log', args.exp_path, args.date_str, rank=args.local_rank)
-    #     open(os.path.join(args.exp_path, args.date_str + '.txt'), 'w').write(
-    #         str(args) + '\n\n')
-    #     writer = SummaryWriter(log_dir=args.tb_exp_path, comment=args.tb_tag)
-    #     return writer
+    args.best_record = {'epoch': -1, 'iter': 0, 'val_loss': 1e10, 'acc': 0,
+                        'acc_cls': 0, 'mean_iu': 0, 'fwavacc': 0}
+    args.last_record = {}
+    if args.local_rank == 0:
+        os.makedirs(args.exp_path, exist_ok=True)
+        os.makedirs(args.tb_exp_path, exist_ok=True)
+        # save_log('log', args.exp_path, args.date_str, rank=args.local_rank)
+        # open(os.path.join(args.exp_path, args.date_str + '.txt'), 'w').write(
+        #     str(args) + '\n\n')
+        # writer = SummaryWriter(log_dir=args.tb_exp_path, comment=args.tb_tag)
+        # return writer
     return None
 
 def evaluate_eval_for_inference(hist, dataset=None):
