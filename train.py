@@ -179,6 +179,9 @@ parser.add_argument('--wandb_run_name', type=str, default='sml_RGBD',
                     help='The name of the wandb run to be registered'
 )
 
+parser.add_argument('--freeze_scheduler', type=bool, default=False,
+                    help='If true, do not use scheduler')
+
 args = parser.parse_args()
 
 # Enable CUDNN Benchmarking optimization
@@ -375,7 +378,8 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
                     time_meter.reset()
 
         curr_iter += 1
-        scheduler.step()
+        if not args.freeze_scheduler:
+            scheduler.step()    
 
         if i > 5 and args.test_mode:
             return curr_iter
