@@ -113,7 +113,7 @@ parser.add_argument('--scale_max', type=float, default=2.0,
 parser.add_argument('--weight_decay', type=float, default=5e-4)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--snapshot', type=str, default=None)
-parser.add_argument('--restore_optimizer', action='store_true', default=False)
+parser.add_argument('--restore_optimizer', type=bool, default=False)
 
 parser.add_argument('--city_mode', type=str, default='train',
                     help='experiment directory date name')
@@ -182,6 +182,9 @@ parser.add_argument('--wandb_run_name', type=str, default='sml_RGBD',
 parser.add_argument('--freeze_scheduler', type=bool, default=False,
                     help='If true, do not use scheduler')
 
+parser.add_argument('--acc_grad_steps', type=int, default=1,
+                    help='Number of steps applied to accumulate gradients, if 1 no accumulation occurs')
+
 args = parser.parse_args()
 
 # Enable CUDNN Benchmarking optimization
@@ -214,7 +217,7 @@ print('My Rank:', args.local_rank)
 args.dist_url = args.dist_url + str(8000 + (int(time.time()%1000))//10)
 
 torch.distributed.init_process_group(backend='nccl',
-                                     init_method=args.dist_url,
+                                     init_method='env://',
                                      world_size=args.world_size,
                                      rank=args.local_rank)
 
@@ -260,13 +263,13 @@ def main():
     # Main Loop
     # for epoch in range(args.start_epoch, args.max_epoch):
 
-    while i < args.max_iter:
+    while i < args.max_iter * args.acc_grad_steps:
         # Update EPOCH CTR
         cfg.immutable(False)
         cfg.ITER = i
         cfg.immutable(True)
 
-        i = train(train_loader, net, optim, epoch, writer, scheduler, args.max_iter)
+        i = train(train_loader, net, optim, epoch, writer, scheduler, args.max_iter * args.acc_grad_steps)
         train_loader.sampler.set_epoch(epoch + 1)
         # if i % args.val_interval == 0:
         for dataset, val_loader in val_loaders.items():
@@ -312,7 +315,8 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
     time_meter = AverageMeter()
 
     curr_iter = curr_epoch * len(train_loader)
-
+    
+    optim.zero_grad()
     for i, data in enumerate(tqdm(train_loader, desc='Training Loop')):
         if curr_iter >= max_iter:
             break
@@ -326,7 +330,7 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
         aux_gts = [aux_gts]
 
         batch_pixel_size = C * H * W
-
+        
         for di, ingredients in enumerate(zip(inputs, seg_gts, ood_gts, aux_gts)):
             input, seg_gt, ood_gt, aux_gt = ingredients
 
@@ -335,13 +339,14 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
             img_gt = None
 
             input, seg_gt, ood_gt = input.cuda(), seg_gt.cuda(), ood_gt.cuda()
-
-            optim.zero_grad()
+            
 
             outputs_index = 0
             outputs = net(input, seg_gts=seg_gt, ood_gts=ood_gt, aux_gts=aux_gt)
             main_loss, aux_loss, anomaly_score = outputs
             total_loss = main_loss + (0.4 * aux_loss)
+
+            total_loss = total_loss / args.acc_grad_steps
 
             log_total_loss = total_loss.clone().detach_()
             torch.distributed.all_reduce(log_total_loss, torch.distributed.ReduceOp.SUM)
@@ -349,7 +354,11 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
             train_total_loss.update(log_total_loss.item(), batch_pixel_size)
 
             total_loss.backward()
-            optim.step()
+
+            if (curr_iter + 1) % args.acc_grad_steps == 0:
+
+                optim.step()
+                optim.zero_grad()
 
             time_meter.update(time.time() - start_ts)
 
@@ -361,7 +370,7 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
                         curr_epoch, i + 1, len(train_loader), curr_iter, train_total_loss.avg,
                         main_loss.item(), optim.param_groups[-1]['lr'],
                         time_meter.avg / args.train_batch_size)
-
+                    print(msg)
                     logging.info(msg)
 
                     # Log tensorboard metrics for each iteration of the training phase
@@ -377,9 +386,9 @@ def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):
                     train_total_loss.reset()
                     time_meter.reset()
 
-        curr_iter += 1
-        if not args.freeze_scheduler:
+        if not args.freeze_scheduler and (curr_iter + 1) % args.acc_grad_steps == 0:    
             scheduler.step()    
+        curr_iter += 1
 
         if i > 5 and args.test_mode:
             return curr_iter
