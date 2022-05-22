@@ -113,7 +113,7 @@ parser.add_argument('--scale_max', type=float, default=2.0,
 parser.add_argument('--weight_decay', type=float, default=5e-4)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--snapshot', type=str, default=None)
-parser.add_argument('--restore_optimizer', type=bool, default=False)
+parser.add_argument('--restore_optimizer', type=bool, default=True)
 
 parser.add_argument('--city_mode', type=str, default='train',
                     help='experiment directory date name')
